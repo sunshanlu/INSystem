@@ -1,0 +1,25 @@
+---
+odom:
+	pulse: 1024		# odom一圈脉冲数
+	radius: 0.155	# odom轮子半径
+	span: 0.1		# odom采样时间
+	var: 0.05		# odom速度标准差
+
+imu:
+	bg_var: 1.e-6 	# imu角速度偏置标准差
+	ba_var: 1.e-4	# imu加速度偏置标准差
+	g_norm: 9.81	# imu重力加速度模
+
+gnss: 
+	pos_var: 0.1		# gnss位置标准差
+	alt_var: 0.1		# gnss高度标准差
+	ang_var: 1.0		# gnss角度标准差，单位°
+	ant_angle: 12.06	# gnss天线安装角度，单位°
+	ant_x: -0.17		# gnss天线安装位置x
+	ant_y: -0.20		# gnss天线安装位置y
+	ant_z: 0.0			# gnss天线安装位置z
+	cor_type: 0			# 0代表东北天坐标系，1代表北东地坐标系
+
+g2o:
+	verbose: True		# g2o是否输出调试信息
+	prior_var: 0.1		# i状态先验信息

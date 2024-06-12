@@ -10,6 +10,7 @@
 #include "IMUPreint.h"
 #include "NavState.h"
 #include "ODOM.h"
+#include "Option.h"
 
 namespace insystem {
 
@@ -41,6 +42,8 @@ void GINS::AddImu(IMUSharedPtr imu) {
  * @param gnss  输入的Gnss数据
  */
 void GINS::AddGnss(GnssSharedPtr gnss) {
+    if (!gnss->convert_success_)
+        return;
     lastStamp_ = gnss->stamp_;
     curr_gnss_ = gnss;
 
@@ -48,8 +51,9 @@ void GINS::AddGnss(GnssSharedPtr gnss) {
         if (!gnss->is_valid_)
             return;
         last_gnss_ = gnss;
+        origin_ = gnss->p_.translation();
         last_frame_ = std::make_shared<NavState>();
-        last_frame_->p_ = gnss->p_;
+        last_frame_->p_ = gnss->GetBasePose(Option::gnss_antenna_angle_, Option::gnss_antenna_pos_, origin_);
         last_frame_->v_.setZero();
         last_frame_->ba_ = imu_initer_->GetBiasA();
         last_frame_->bg_ = imu_initer_->GetBiasG();
@@ -70,7 +74,7 @@ void GINS::AddGnss(GnssSharedPtr gnss) {
 /**
  * @brief 添加odom数据
  *
- * @param odom
+ * @param odom 输入的odom数据
  */
 void GINS::AddOdom(ODOMSharedPtr odom) {
     last_odom_ = odom;
@@ -148,16 +152,14 @@ void GINS::Optimize() {
     ba_e->setId(1);
     ba_e->setVertex(0, bai);
     ba_e->setVertex(1, baj);
-
-    /// todo ：信息矩阵写入config
-    ba_e->setInformation(1e8 * Mat3::Identity());
+    ba_e->setInformation(1.0 / Option::ba_cov_ * Mat3::Identity());
     optimizer.addEdge(ba_e);
 
     auto *bg_e = new BiasGEdge();
     bg_e->setId(2);
     bg_e->setVertex(0, bgi);
     bg_e->setVertex(1, bgj);
-    bg_e->setInformation(1e12 * Mat3::Identity());
+    bg_e->setInformation(1.0 / Option::bg_cov_ * Mat3::Identity());
     optimizer.addEdge(bg_e);
 
     /// 3. i时刻先验边
@@ -167,41 +169,27 @@ void GINS::Optimize() {
     prior_e->setVertex(1, vi);
     prior_e->setVertex(2, bgi);
     prior_e->setVertex(3, bai);
-
-    /// todo ：信息矩阵写入config
-    prior_e->setInformation(Mat15::Identity() * 1e2);
+    prior_e->setInformation(Mat15::Identity() / Option::prior_cov_);
     optimizer.addEdge(prior_e);
 
     /// 4. GNSS约束边
-    /// todo ：信息矩阵写入config
-    static double gnss_pos_var = 0.1;
-    static double gnss_hei_var = 0.1;
-    static double gnss_ang_var = M_PI / 180.0;
-    static double gp2 = gnss_pos_var * gnss_pos_var;
-    static double gh2 = gnss_hei_var * gnss_hei_var;
-    static double ga2 = gnss_ang_var * gnss_ang_var;
-
-    Vec6 gcov;
-    gcov << ga2, ga2, ga2, gp2, gp2, gh2;
-    auto *gnss_ei = new GnssEdge(last_gnss_->p_, gcov, 1.0);
+    auto *gnss_ei = new GnssEdge(
+        last_gnss_->GetBasePose(Option::gnss_antenna_angle_, Option::gnss_antenna_pos_, origin_), Option::gcov_, 1.0);
     gnss_ei->setId(4);
     gnss_ei->setVertex(0, pi);
     optimizer.addEdge(gnss_ei);
 
-    auto *gnss_ej = new GnssEdge(curr_frame_->p_, gcov, 1.0);
+    auto *gnss_ej = new GnssEdge(
+        curr_gnss_->GetBasePose(Option::gnss_antenna_angle_, Option::gnss_antenna_pos_, origin_), Option::gcov_, 1.0);
     gnss_ej->setId(5);
     gnss_ej->setVertex(0, pj);
     optimizer.addEdge(gnss_ej);
 
     /// 5. 速度约束边
-    /// todo ：信息矩阵写入config
-    static double odom_var = 0.05;
-    static double o2 = odom_var * odom_var;
-    Vec3 ocov;
-    ocov << o2, o2, o2;
     if (update_odom_) {
         update_odom_ = false;
-        auto o_e = new OdomEdge(last_odom_->v_, ocov, 1.0, pj);
+        auto o_e = new OdomEdge(last_odom_->GetVelocity(Option::odom_pulse_, Option::odom_radius_, Option::odom_dt_),
+                                Option::odom_cov_, 1.0, pj);
         o_e->setId(6);
         o_e->setVertex(0, vj);
         optimizer.addEdge(o_e);

@@ -28,6 +28,7 @@ private:
     NavStateSharedPtr last_frame_;  ///< i时刻导航状态
     GnssSharedPtr curr_gnss_;       ///< j时刻GNSS信息
     GnssSharedPtr last_gnss_;       ///< i时刻GNSS信息
+    Vec3 origin_;                   ///< gnss初始化后，定义地图原点
 };
 
 } // namespace insystem

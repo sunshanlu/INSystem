@@ -1,12 +1,13 @@
 #include "IMUIniter.h"
 #include "IMU.h"
 #include "ODOM.h"
+#include "Option.h"
 
 namespace insystem {
 
 /**
  * @brief 添加IMU数据
- * 
+ *
  * @param imu       输入的imu数据
  * @return true     初始化完成
  * @return false    初始化还未完成
@@ -28,7 +29,7 @@ bool IMUIniter::AddImu(IMUSharedPtr imu) {
  * @param odom 输入的里程计数据
  */
 void IMUIniter::AddOdom(ODOMSharedPtr odom) {
-    if (odom->v_ != 0) {
+    if (odom->GetVelocity(Option::odom_pulse_, Option::odom_radius_, Option::odom_dt_) != 0) {
         std::lock_guard<std::mutex> lock(mutex_);
         imus_.clear();
     }
@@ -36,7 +37,7 @@ void IMUIniter::AddOdom(ODOMSharedPtr odom) {
 
 /**
  * @brief 计算IMU的均值和协方差
- * 
+ *
  */
 void IMUIniter::ComputeMeanAndCov() {
     decltype(imus_) imus;
@@ -56,7 +57,7 @@ void IMUIniter::ComputeMeanAndCov() {
     g_ = -(ma / ma.norm() * gNorm_);
     ba_ = ma + g_;
     bg_ = mg;
-    for (const auto &imu:imus_){
+    for (const auto &imu : imus_) {
         Vec3 accCovi = imu->acc_ - ba_ + g_;
         Vec3 gyrCovi = imu->gyr_ - bg_;
         accCov_ += accCovi.cwiseProduct(accCovi);

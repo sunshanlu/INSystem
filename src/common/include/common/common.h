@@ -32,6 +32,9 @@ using shared_mutex = std::shared_mutex;
 using BlockSolver = g2o::BlockSolverX;
 using LinearSolver = g2o::LinearSolverEigen<BlockSolver::PoseMatrixType>;
 
+class Data;
+using DataSharedPtr = std::shared_ptr<Data>;
+
 using Vec6 = Eigen::Matrix<double, 6, 1>;
 using Vec3 = Eigen::Matrix<double, 3, 1>;
 using Vec9 = Eigen::Matrix<double, 9, 1>;
