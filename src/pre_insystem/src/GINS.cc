@@ -11,8 +11,54 @@
 #include "NavState.h"
 #include "ODOM.h"
 #include "Option.h"
+#include "Viewer.h"
 
 namespace insystem {
+
+using namespace std::placeholders;
+
+GINS::GINS(std::string ConfigPath)
+    : Node("GINSystem")
+    , init_imu_(false)
+    , init_gnss_(false)
+    , update_odom_(false)
+    , last_odom_(nullptr)
+    , imu_initer_(nullptr)
+    , imu_preint_(nullptr)
+    , last_imu_(nullptr)
+    , lastStamp_(0)
+    , curr_frame_(nullptr)
+    , last_frame_(nullptr)
+    , curr_gnss_(nullptr)
+    , last_gnss_(nullptr)
+    , origin_(Vec3::Zero()) {
+
+    declare_parameter("ConfigPath", "");
+    std::string rosConfigPath = get_parameter("ConfigPath").as_string();
+    
+    if (!rosConfigPath.empty())
+        ConfigPath = rosConfigPath;
+    Option option(ConfigPath);
+
+    imu_initer_ = std::make_shared<IMUIniter>(Option::initer_size_, Option::initer_time_, Option::g_norm_);
+    imu_preint_ = std::make_shared<IMUPreint>();
+    if (Option::use_viewer_) {
+        viewer_ =
+            std::make_shared<Viewer>(Option::win_name_, Option::win_width_, Option::win_height_, Option::traj_size_,
+                                     Option::traj_color_, Option::coor_x_color_, Option::coor_y_color_,
+                                     Option::coor_z_color_, Option::coor_x_, Option::coor_y_, Option::coor_z_);
+        thread_v_ = std::make_shared<std::thread>(&Viewer::Render, viewer_);
+    }
+    if (Option::save_trajectory_) {
+        tra_ifs.open(Option::trajectory_file_);
+        tra_ifs << "x y z qx qy qz qw" << std::endl;
+    }
+    state_pub_ = create_publisher<NavStateMsg>("pre_insystem/navstate", 10);
+    imu_sub_ = create_subscription<IMUMsg>("pre_insystem/imu", 10, std::bind(&GINS::IMUCallback, this, _1));
+    rtk_sub_ = create_subscription<RTK>("pre_insystem/rtk", 10, std::bind(&GINS::RTKCallback, this, _1));
+    if (Option::with_odom_)
+        odom_sub_ = create_subscription<Wodom>("pre_insystem/odom", 10, std::bind(&GINS::OdomCallback, this, _1));
+}
 
 /**
  * @brief 添加IMU数据，进行预积分
@@ -24,10 +70,19 @@ namespace insystem {
 void GINS::AddImu(IMUSharedPtr imu) {
     if (!init_imu_) {
         init_imu_ = imu_initer_->AddImu(imu);
-        if (init_imu_)
+        if (init_imu_){
             imu_preint_->SetIMUInfo(imu_initer_);
-    } else if (init_gnss_ && init_imu_)
+            RCLCPP_INFO(get_logger(), "imu初始化成功！");
+        }
+    } else if (init_gnss_ && init_imu_) {
         imu_preint_->Integrate(imu, imu->stamp_ - lastStamp_);
+        auto state = GetState();
+        if (Option::use_viewer_)
+            viewer_->UpdateNavState(state);
+        if (Option::save_trajectory_)
+            SaveTrajectory(*state);
+        PublishState(state);
+    }
 
     lastStamp_ = imu->stamp_;
     last_imu_ = imu;
@@ -58,13 +113,22 @@ void GINS::AddGnss(GnssSharedPtr gnss) {
         last_frame_->ba_ = imu_initer_->GetBiasA();
         last_frame_->bg_ = imu_initer_->GetBiasG();
         last_frame_->stamp_ = gnss->stamp_;
+        curr_frame_ = last_frame_;
         init_gnss_ = true;
+        RCLCPP_INFO(get_logger(), "RTK初始化成功!");
     } else if (init_gnss_ && init_imu_) {
         curr_frame_ = std::make_shared<NavState>();
         curr_frame_->stamp_ = gnss->stamp_;
         imu_preint_->Integrate(last_imu_, lastStamp_ - last_imu_->stamp_);
         imu_preint_->Predict(*last_frame_, *curr_frame_, imu_initer_->GetGravity());
         Optimize();
+        if (Option::use_viewer_)
+            viewer_->UpdateNavState(curr_frame_);
+
+        if (Option::save_trajectory_)
+            SaveTrajectory(*curr_frame_);
+        PublishState(curr_frame_);
+
         imu_preint_->Reset();
         last_frame_ = curr_frame_;
         last_gnss_ = curr_gnss_;
@@ -84,11 +148,11 @@ void GINS::AddOdom(ODOMSharedPtr odom) {
 }
 
 void GINS::Optimize() {
-    if (imu_preint_->GetDt() < 1e3)
+    if (imu_preint_->GetDt() < 1e-3)
         return;
 
     g2o::SparseOptimizer optimizer;
-    auto *lm = new g2o::OptimizationAlgorithmLevenberg(g2o::make_unique<BlockSolver>(g2o::make_unique<LinearSolver>()));
+    auto *lm = new g2o::OptimizationAlgorithmLevenberg(std::make_unique<BlockSolver>(std::make_unique<LinearSolver>()));
     optimizer.setAlgorithm(lm);
 
     /// i时刻的状态pi, vi, bgi, bai
@@ -186,16 +250,110 @@ void GINS::Optimize() {
     optimizer.addEdge(gnss_ej);
 
     /// 5. 速度约束边
+    OdomEdge *o_e;
     if (update_odom_) {
         update_odom_ = false;
-        auto o_e = new OdomEdge(last_odom_->GetVelocity(Option::odom_pulse_, Option::odom_radius_, Option::odom_dt_),
-                                Option::odom_cov_, 1.0, pj);
+        o_e = new OdomEdge(last_odom_->GetVelocity(Option::odom_pulse_, Option::odom_radius_, Option::odom_dt_),
+                           Option::odom_cov_, 1.0, pj);
         o_e->setId(6);
         o_e->setVertex(0, vj);
         optimizer.addEdge(o_e);
     }
+    optimizer.setVerbose(Option::verbose_);
+    preint_e->computeError();
+    ba_e->computeError();
+    bg_e->computeError();
+    prior_e->computeError();
+    gnss_ei->computeError();
+    gnss_ej->computeError();
+
     optimizer.initializeOptimization(0);
     optimizer.optimize(20);
+
+    curr_frame_->p_ = pj->estimate();
+    curr_frame_->v_ = vj->estimate();
+    curr_frame_->ba_ = baj->estimate();
+    curr_frame_->bg_ = bgj->estimate();
+}
+
+/**
+ * @brief 获取gin_system系统的导航状态
+ * @details
+ *      1. 保证curr_frame_不为空
+ *      2. 保证imu_preint_不为空
+ * @return NavStateSharedPtr 输出的导航状态
+ */
+NavStateSharedPtr GINS::GetState() {
+    auto state = std::make_shared<NavState>();
+    imu_preint_->Predict(*curr_frame_, *state, imu_initer_->GetGravity());
+    return state;
+}
+
+/**
+ * @brief 将指定导航状态保存到文件中
+ *
+ * @param navstate
+ */
+void GINS::SaveTrajectory(const NavState &navstate) {
+    auto q = navstate.p_.unit_quaternion();
+    auto t = navstate.p_.translation();
+    tra_ifs << t.x() << " " << t.y() << " " << t.z() << " ";
+    tra_ifs << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
+}
+
+/**
+ * @brief imu回调
+ *
+ * @param imu_msg
+ */
+void GINS::IMUCallback(IMUMsg::SharedPtr imu_msg) {
+    IMUSharedPtr imu = std::make_shared<IMU>(imu_msg);
+    AddImu(imu);
+}
+
+/**
+ * @brief rtk回调
+ *
+ * @param rtk
+ */
+void GINS::RTKCallback(RTK::SharedPtr rtk) {
+    GnssSharedPtr gnss = std::make_shared<Gnss>(rtk, Option::coord_type_);
+    AddGnss(gnss);
+}
+
+/**
+ * @brief odom回调
+ *
+ * @param odom_msg
+ */
+void GINS::OdomCallback(Wodom::SharedPtr odom_msg) {
+    ODOMSharedPtr odom = std::make_shared<ODOM>(odom_msg);
+    AddOdom(odom);
+}
+
+/**
+ * @brief 发布状态
+ *
+ * @param navstate 输入的状态信息
+ */
+void GINS::PublishState(const NavStateSharedPtr &navstate) {
+    const auto &q = navstate->p_.unit_quaternion();
+    const auto &p = navstate->p_.translation();
+
+    NavStateMsg msg;
+    msg.header.stamp = now();
+    msg.header.frame_id = "GINS";
+    msg.pose.position.x = p[0];
+    msg.pose.position.y = p[1];
+    msg.pose.position.z = p[2];
+    msg.pose.orientation.x = q.x();
+    msg.pose.orientation.y = q.y();
+    msg.pose.orientation.z = q.z();
+    msg.pose.orientation.w = q.w();
+    msg.velocity.x = navstate->v_.x();
+    msg.velocity.y = navstate->v_.y();
+    msg.velocity.z = navstate->v_.z();
+    state_pub_->publish(msg);
 }
 
 } // namespace insystem

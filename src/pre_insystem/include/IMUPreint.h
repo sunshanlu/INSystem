@@ -4,7 +4,7 @@
 #include <sophus/so3.hpp>
 
 #include "IMU.h"
-#include "common/common.h"
+#include "Common.h"
 
 namespace insystem {
 class IMUPreint {

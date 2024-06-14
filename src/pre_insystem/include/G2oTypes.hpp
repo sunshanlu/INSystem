@@ -5,7 +5,7 @@
 #include <g2o/core/base_unary_edge.h>
 #include <g2o/core/base_vertex.h>
 
-#include "common/common.h"
+#include "Common.h"
 
 namespace insystem {
 
@@ -18,9 +18,15 @@ public:
 
     void oplusImpl(const double *update) override;
 
-    bool read(std::istream &is) { return false; }
+    bool read(std::istream &is) {
+        (void)is;
+        return false;
+    }
 
-    bool write(std::ostream &os) const { return false; }
+    bool write(std::ostream &os) const {
+        (void)os;
+        return false;
+    }
 
     void setToOriginImpl() {}
 };
@@ -33,9 +39,15 @@ public:
     VelocityVertex() = default;
     void oplusImpl(const double *update) override;
 
-    bool read(std::istream &is) { return false; }
+    bool read(std::istream &is) {
+        (void)is;
+        return false;
+    }
 
-    bool write(std::ostream &os) const { return false; }
+    bool write(std::ostream &os) const {
+        (void)os;
+        return false;
+    }
 
     void setToOriginImpl() {}
 };
@@ -65,9 +77,15 @@ public:
 
     void linearizeOplus() override;
 
-    bool read(std::istream &is) { return false; }
+    bool read(std::istream &is) {
+        (void)is;
+        return false;
+    }
 
-    bool write(std::ostream &os) const { return false; }
+    bool write(std::ostream &os) const {
+        (void)os;
+        return false;
+    }
 
 private:
     IMUPreintSharedPtr preintPtr_; ///< 预积分对象指针
@@ -78,16 +96,31 @@ private:
     Vec3 ep_;                      ///< 位置残差
 };
 
-template <typename Vertex> class BiasEdge;
+template <typename T> class BiasEdge;
 using BiasGEdge = BiasEdge<BiasGVertex>;
 using BiasAEdge = BiasEdge<BiasAVertex>;
 
 /// @brief 对前后两个状态的偏置约束
-template <typename Vertex> class BiasEdge : public g2o::BaseBinaryEdge<3, Vec3, Vertex, Vertex> {
+template <typename T> class BiasEdge : public g2o::BaseBinaryEdge<3, Vec3, T, T> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    BiasEdge() = default;
+    using g2o::BaseBinaryEdge<3, Vec3, T, T>::_vertices;
+    using g2o::BaseBinaryEdge<3, Vec3, T, T>::_error;
+    using g2o::BaseBinaryEdge<3, Vec3, T, T>::_jacobianOplusXi;
+    using g2o::BaseBinaryEdge<3, Vec3, T, T>::_jacobianOplusXj;
+
+    BiasEdge() {}
+
+    bool read(std::istream &is) override {
+        (void)is;
+        return false;
+    }
+
+    bool write(std::ostream &os) const override {
+        (void)os;
+        return false;
+    }
 
     /**
      * @brief 计算残差
@@ -95,8 +128,8 @@ public:
      *      1. 这里定义顶点的顺序为bi、bj
      */
     void computeError() override {
-        auto *bi = dynamic_cast<Vertex *>(_vertices[0]);
-        auto *bj = dynamic_cast<Vertex *>(_vertices[1]);
+        T *bi = static_cast<T *>(_vertices[0]);
+        T *bj = static_cast<T *>(_vertices[1]);
         _error = bj->estimate() - bi->estimate();
     }
 
@@ -104,10 +137,6 @@ public:
         _jacobianOplusXi = -Mat3::Identity();
         _jacobianOplusXj = Mat3::Identity();
     }
-
-    bool read(std::istream &is) { return false; }
-
-    bool write(std::ostream &os) const { return false; }
 };
 
 /// @brief 先验信息约束
@@ -116,15 +145,23 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     PriorEdge(NavStateSharedPtr navstate)
-        : navstate_(navstate) {}
+        : navstate_(navstate) {
+        resize(4);
+    }
 
     void computeError() override;
 
     void linearizeOplus() override;
 
-    bool read(std::istream &is) { return false; }
+    bool read(std::istream &is) {
+        (void)is;
+        return false;
+    }
 
-    bool write(std::ostream &os) const { return false; }
+    bool write(std::ostream &os) const {
+        (void)os;
+        return false;
+    }
 
 private:
     NavStateSharedPtr navstate_; ///< 输入的i时刻的状态
@@ -141,9 +178,15 @@ public:
 
     void linearizeOplus() override;
 
-    bool read(std::istream &is) { return false; }
+    bool read(std::istream &is) {
+        (void)is;
+        return false;
+    }
 
-    bool write(std::ostream &os) const { return false; }
+    bool write(std::ostream &os) const {
+        (void)os;
+        return false;
+    }
 
 private:
     SE3 gp_;  ///< gnss位姿
@@ -161,9 +204,15 @@ public:
 
     void linearizeOplus() override;
 
-    bool read(std::istream &is) { return false; }
+    bool read(std::istream &is) {
+        (void)is;
+        return false;
+    }
 
-    bool write(std::ostream &os) const { return false; }
+    bool write(std::ostream &os) const {
+        (void)os;
+        return false;
+    }
 
 private:
     Vec3 ov_;

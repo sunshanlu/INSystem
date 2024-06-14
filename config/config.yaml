@@ -1,25 +1,49 @@
----
 odom:
-	pulse: 1024		# odom一圈脉冲数
-	radius: 0.155	# odom轮子半径
-	span: 0.1		# odom采样时间
-	var: 0.05		# odom速度标准差
+    with_odom: True # 是否使用odom
+    pulse: 1024	    # odom一圈脉冲数
+    radius: 0.155   # odom轮子半径
+    span: 0.1       # odom采样时间
+    var: 0.05       # odom速度标准差
 
 imu:
-	bg_var: 1.e-6 	# imu角速度偏置标准差
-	ba_var: 1.e-4	# imu加速度偏置标准差
-	g_norm: 9.81	# imu重力加速度模
+    bg_var: 1.e-6   # imu角速度偏置标准差
+    ba_var: 1.e-4   # imu加速度偏置标准差
+    g_norm: 9.81    # imu重力加速度模
+
+imu_initer:
+    max_size: 2000  # imu静态初始化最大样本数
+    init_time: 10.0 # imu静态初始化时间
 
 gnss: 
-	pos_var: 0.1		# gnss位置标准差
-	alt_var: 0.1		# gnss高度标准差
-	ang_var: 1.0		# gnss角度标准差，单位°
-	ant_angle: 12.06	# gnss天线安装角度，单位°
-	ant_x: -0.17		# gnss天线安装位置x
-	ant_y: -0.20		# gnss天线安装位置y
-	ant_z: 0.0			# gnss天线安装位置z
-	cor_type: 0			# 0代表东北天坐标系，1代表北东地坐标系
+    pos_var: 0.1        # gnss位置标准差
+    alt_var: 0.1        # gnss高度标准差
+    ang_var: 1.0        # gnss角度标准差，单位°
+    ant_angle: 12.06    # gnss天线安装角度，单位°
+    ant_x: -0.17        # gnss天线安装位置x
+    ant_y: -0.20        # gnss天线安装位置y
+    ant_z: 0.0          # gnss天线安装位置z
+    cor_type: 1         # 0代表东北天坐标系，1代表北东地坐标系
 
 g2o:
-	verbose: True		# g2o是否输出调试信息
-	prior_var: 0.1		# i状态先验信息
+    verbose: False      # g2o是否输出调试信息
+    prior_var: 0.1      # i状态先验信息
+
+viewer:
+    use_viewer: True            # 是否进行可视化
+    win_name: gin_system        # 可视化窗口名称
+    win_width: 1200             # 可视化窗口宽度
+    win_height: 675             # 可视化窗口高度
+    traj_size: 1.e+6            # 可视化轨迹的最大尺寸
+    traj_color: [1.0, 1.0, 0.2] # 可视化轨迹的颜色
+    coor_size:
+        x: 5    # 坐标轴x的长度
+        y: 2    # 坐标轴y的长度
+        z: 1.5  # 坐标轴z的长度
+    coor_color:
+        x: [1.0, 0.0, 0.0]  # 坐标轴x的颜色
+        y: [0.0, 1.0, 0.0]  # 坐标轴y的颜色
+        z: [0.0, 0.0, 1.0]  # 坐标轴z的颜色
+
+trajectory:
+    save_trajectory: True                                                     # 是否保存轨迹
+    save_path: /home/rookie-lu/Project/INSystem/trajectory/trajectory.txt     # 轨迹保存路径

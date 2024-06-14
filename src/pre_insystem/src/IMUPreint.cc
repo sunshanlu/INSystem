@@ -72,11 +72,11 @@ IMUPreint::IMUPreint()
     , dv_(Vec3::Zero())
     , dp_(Vec3::Zero())
     , dR_dbg(Mat3::Zero())
-    , dv_dba(Vec3::Zero())
-    , dv_dbg(Vec3::Zero())
-    , dp_dba(Vec3::Zero())
-    , dp_dbg(Vec3::Zero())
-    , cov_(Mat15::Zero())
+    , dv_dba(Mat3::Zero())
+    , dv_dbg(Mat3::Zero())
+    , dp_dba(Mat3::Zero())
+    , dp_dbg(Mat3::Zero())
+    , cov_(Mat9::Zero())
     , dt_(0) {}
 
 /**

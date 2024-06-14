@@ -32,8 +32,8 @@ void VelocityVertex::oplusImpl(const double *update) { _estimate += Eigen::Map<c
  */
 PreIntEdge::PreIntEdge(IMUPreintSharedPtr &preintPtr, const Vec3 &g, double weight)
     : preintPtr_(preintPtr)
-    , dt_(preintPtr_->GetDt())
-    , g_(g) {
+    , g_(g)
+    , dt_(preintPtr->GetDt()) {
     setInformation(preintPtr_->GetCov().inverse() * weight);
     resize(6);
 }
@@ -81,7 +81,6 @@ void PreIntEdge::linearizeOplus() {
     auto p1 = dynamic_cast<PoseVertex *>(_vertices[0]);
     auto v1 = dynamic_cast<VelocityVertex *>(_vertices[1]);
     auto bg1 = dynamic_cast<BiasGVertex *>(_vertices[2]);
-    auto ba1 = dynamic_cast<BiasAVertex *>(_vertices[3]);
     auto p2 = dynamic_cast<PoseVertex *>(_vertices[4]);
     auto v2 = dynamic_cast<VelocityVertex *>(_vertices[5]);
     Mat3 Ri = p1->estimate().rotationMatrix();
