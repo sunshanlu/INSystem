@@ -2,6 +2,9 @@
 
 ## 1. 介绍
 
+<div align="center">
+	<img src="https://raw.githubusercontent.com/sunshanlu/INSystem/devel/GINS.gif" alt="INSystem" width=600>
+</div>
 
 参考高翔的自动驾驶与机器人中的SLAM技术的第四章，使用ROS2实现基于图优化和预积分的惯性导航系统。
 1. 对ROS2做了深度集成
